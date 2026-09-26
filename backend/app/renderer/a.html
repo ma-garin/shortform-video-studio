@@ -1,0 +1,92 @@
+<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#000}canvas{display:block}</style>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script src="core.js"></script>
+<script>
+// 概念A：会話が育つ（チャットスレッドが60秒スクロール）
+const c=document.getElementById('c').getContext('2d');
+const BG='#f3f4f6',NAVY='#1b2a41',GRAY='#e3e6ea',INK='#1a1d21',MUTED='#7a828c',PURP='#7c4dff',PURP2='#ece4ff';
+const MAXB=860;
+function bubble(x,y,w,h,side,fill,scale=1,alpha=1){c.save();c.globalAlpha=alpha;const cx=side==='r'?x+w:x,cy=y+h;c.translate(cx,cy);c.scale(scale,scale);c.translate(-cx,-cy);
+  c.fillStyle=fill;rr(c,x,y,w,h,30);c.fill();c.restore()}
+function textBlock(lines,x,y,px,color,lh,alpha=1,maxLines=99){c.save();c.globalAlpha=alpha;c.fillStyle=color;font(c,500,px);c.textBaseline='top';lines.slice(0,maxLines).forEach((l,i)=>c.fillText(l,x,y+i*lh));c.restore()}
+// メッセージ配置：各シーンの絶対Yを積み上げる（描画はカメラでずらす）
+function layoutScene(ex,i){
+  const items=[];let y=0;const pad=34,px=44,lh=64;
+  font(c,500,px);
+  if(ex.x){const ls=wrap(c,ex.x,MAXB-pad*2);const w=Math.max(...ls.map(l=>c.measureText(l).width))+pad*2,h=ls.length*lh+pad*2;
+    items.push({k:'x',ls,w,h,y,side:'r'});y+=h+28;
+    const rl=wrap(c,ex.xr,MAXB-pad*2);const rw=Math.max(...rl.map(l=>c.measureText(l).width))+pad*2,rh=rl.length*lh+pad*2;
+    items.push({k:'xr',ls:rl,w:rw,h:rh,y,side:'l'});y+=rh+28}
+  const ol=wrap(c,ex.o,MAXB-pad*2);const ow=Math.max(...ol.map(l=>c.measureText(l).width))+pad*2,oh=ol.length*lh+pad*2;
+  items.push({k:'o',ls:ol,w:ow,h:oh,y,side:'r'});y+=oh+28+70;
+  font(c,400,40);const rl2=[];ex.or.forEach(s=>rl2.push(...wrap(c,s,MAXB-pad*2)));const rw2=MAXB,rh2=rl2.length*56+pad*2;
+  items.push({k:'or',ls:rl2,w:rw2,h:rh2,y,side:'l',n:rl2.length});y+=rh2+90;
+  return{items,h:y}
+}
+const SC=EX.map(layoutScene);
+function drawScene(i,lt,dur,baseY,camY){
+  const ex=EX[i],L=SC[i];const has=!!ex.x;let tagAt=null;
+  const tX=0,tXR=1.0,tXdie=has?2.0:0,tType=has?2.6:0.2,tO=has?3.3:0.8,tOR=tO+.9,tTag=tO+.6;
+  // 見出し
+  const ha=eo(lt/.5);c.save();c.globalAlpha=ha;font(c,700,34);c.fillStyle=MUTED;c.textBaseline='top';c.fillText(`${i+1} / ${NS}　${ex.scene}`,80,baseY-camY-70);c.restore();
+  for(const it of L.items){const y=baseY+it.y-camY;
+    if(it.k==='x'){if(lt<tX)continue;const s=back((lt-tX)/.45);const dead=clamp((lt-tXdie)/.5);
+      const x=W-80-it.w;bubble(x,y,it.w,it.h,'r',NAVY,s,1-dead*.65);
+      textBlock(it.ls,x+34,y+34,44,'#fff',64,1-dead*.3);
+      if(dead>0){c.save();c.strokeStyle='#ff5a5a';c.lineWidth=8;c.lineCap='round';c.beginPath();c.moveTo(x+24,y+it.h/2);c.lineTo(x+24+(it.w-48)*eo(dead),y+it.h/2);c.stroke();c.restore()}}
+    if(it.k==='xr'){if(lt<tXR)continue;const s=back((lt-tXR)/.45);const die=clamp((lt-tXdie)/.4);if(die>=1)continue;
+      const sc=s*(1-ei(die));bubble(80,y,it.w,it.h,'l',GRAY,sc,1-die);textBlock(it.ls,80+34,y+34,44,INK,64,(1-die)*clamp((lt-tXR-.2)/.3))}
+    if(it.k==='o'){if(lt<tType)continue;
+      if(lt<tO){const x=W-80-160;const a=eo((lt-tType)/.3);bubble(x,y,160,88,'r',PURP2,a,a);for(let d=0;d<3;d++){const ph=Math.sin((lt*6-d*1.1))*.5+.5;c.fillStyle=PURP;c.globalAlpha=a*(.35+.65*ph);c.beginPath();c.arc(x+40+d*40,y+44,9,0,7);c.fill()}c.globalAlpha=1;continue}
+      const s=back((lt-tO)/.5);const x=W-80-it.w;bubble(x,y,it.w,it.h,'r',PURP,s);textBlock(it.ls,x+34,y+34,44,'#fff',64,clamp((lt-tO-.15)/.3));
+      if(lt>tTag)tagAt={x:x+it.w,y:y+it.h+14}}
+    if(it.k==='or'){if(lt<tOR)continue;const n=Math.min(it.n,1+Math.floor((lt-tOR)/.4));const grow=clamp((lt-tOR-(n-1)*.4)/.35);
+      const hh=34*2+(n-1+eo(grow))*56;const s=back((lt-tOR)/.4);bubble(80,y,it.w,hh,'l',GRAY,s);textBlock(it.ls,80+34,y+34,40,INK,56,1,n);
+      if(i===NS-1&&lt>tOR+1.6){const a=eo((lt-tOR-1.6)/.4);c.save();c.globalAlpha=a;c.strokeStyle=PURP;c.lineWidth=5;rr(c,80+it.w-100,y+hh-84,52,52,10);c.stroke();if(lt>tOR+2.1){c.strokeStyle=PURP;c.lineWidth=8;c.lineCap='round';c.beginPath();c.moveTo(80+it.w-88,y+hh-58);c.lineTo(80+it.w-72,y+hh-42);c.lineTo(80+it.w-56,y+hh-74);c.stroke()}c.restore()}}
+  }
+  if(tagAt){const a=eo((lt-tTag)/.4);c.save();c.globalAlpha=a;font(c,700,32);const tw=c.measureText('原則：'+ex.tag).width+48;const tx=tagAt.x-tw,ty=tagAt.y-(1-a)*10;c.fillStyle='#fff';c.strokeStyle=PURP;c.lineWidth=3;rr(c,tx,ty,tw,54,27);c.fill();c.stroke();c.fillStyle=PURP;c.textBaseline='middle';c.textAlign='left';c.fillText('原則：'+ex.tag,tx+24,ty+28);c.restore()}
+}
+// 各シーンでカメラが追う高さ
+function anchorY(i,lt){const L=SC[i];const ex=EX[i];const tO=ex.x?3.3:0.8,tOR=tO+.9;
+  let last=L.items[0];if(lt>=tOR)last=L.items[L.items.length-1];else if(lt>=tO)last=L.items[L.items.length-2];else if(lt>=1.0&&ex.x)last=L.items[1];
+  const n=last.k==='or'?Math.min(last.n,1+Math.floor((lt-tOR)/.4)):0;const h=last.k==='or'?68+n*56:last.h;return last.y+h}
+let baseYs=[];{let y=0;EX.forEach((e,i)=>{baseYs[i]=y;y+=SC[i].h+40})}
+function title(lt){c.fillStyle=NAVY;c.fillRect(0,0,W,H);
+  // 「大丈夫です」が出て消える
+  if(lt<1.4){const s=back(lt/.4)*(1-ei((lt-.9)/.4));c.save();c.globalAlpha=clamp(s);bubble(120,760,420,110,'l','#2c3e5a',clamp(s));textBlock(['大丈夫です。'],154,790,46,'#c9d2df',64,clamp(s));c.restore()}
+  // タイマー
+  if(lt>1.1){const p=eo((lt-1.1)/1.2);const sec=Math.round(300*(1-p));const a=1-clamp((lt-2.6)/.4);c.save();c.globalAlpha=a;font(c,700,120);c.fillStyle='#fff';c.textAlign='center';c.textBaseline='middle';c.fillText(`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`,W/2,700);font(c,500,36);c.fillStyle='#9fb0c5';c.fillText('1on1の残り時間',W/2,800);c.restore()}
+  if(lt>2.5){const a=eo((lt-2.5)/.5);c.save();c.textAlign='center';c.textBaseline='middle';
+    charsIn(c,TITLE,W/2,960,80,lt,2.5);
+    c.globalAlpha=eo((lt-3.4)/.5);font(c,500,44);c.fillStyle='#b7ffd9';c.fillText(SUB,W/2,1080);c.restore()}
+}
+function ending(lt){const a=eo(lt/.8);
+  // 引き→整列
+  c.save();c.globalAlpha=a;c.fillStyle=BG;c.fillRect(0,0,W,H);c.restore();
+  c.save();c.textAlign='center';c.textBaseline='middle';
+  font(c,700,40);c.fillStyle=MUTED;c.globalAlpha=eo((lt-.5)/.5);c.fillText(`言い換え ${NS}選`,W/2,300);
+  EX.forEach((ex,i)=>{const d=eo((lt-.8-i*.2)/.5);if(d<=0)return;c.globalAlpha=d;const gap=Math.min(140,840/NS);const y=420+i*gap+(1-d)*40;const w=900;font(c,500,38);c.fillStyle='#fff';rr(c,(W-w)/2,y-52,w,104,26);c.fillStyle=PURP;c.fill();
+    const ls=wrap(c,ex.o,w-60);c.fillStyle='#fff';ls.forEach((l,k)=>c.fillText(l,W/2,y+(k-(ls.length-1)/2)*46))});
+  const p=eo((lt-4.5)/.8);if(p>0){c.globalAlpha=p;font(c,700,36);c.fillStyle=MUTED;c.fillText('共通点',W/2,1310);PRINC.forEach((s,i)=>{const d=eo((lt-5-i*.25)/.5);c.globalAlpha=d;const y=1390+i*90;font(c,700,44);c.fillStyle=NAVY;c.fillText(s,W/2,y)})}
+  const q=eo((lt-8.2)/.6);if(q>0){c.globalAlpha=q;const pulse=1+.08*Math.sin((lt-8.2)*6)*Math.exp(-(lt-8.2)*1.5);c.save();c.translate(W/2,1720);c.scale(pulse,pulse);c.fillStyle=PURP;rr(c,-180,-44,360,88,44);c.fill();font(c,700,38);c.fillStyle='#fff';c.fillText('保存して見返す',0,2);c.restore()}
+  c.globalAlpha=eo((lt-1)/1);font(c,400,26);c.fillStyle=MUTED;c.fillText(CREDIT,W/2,1840);c.restore();
+  const f=clamp((lt-(TL.durs[NS+1]-.6))/.6);if(f>0){c.fillStyle='#000';c.globalAlpha=f;c.fillRect(0,0,W,H);c.globalAlpha=1}
+}
+function render(t){const i=sceneAt(t),lt=t-TL.starts[i];c.setTransform(1,0,0,1,0,0);c.globalAlpha=1;
+  if(i===0){title(lt);if(lt>TL.durs[0]-.5){c.fillStyle=BG;c.globalAlpha=eo((lt-TL.durs[0]+.5)/.5);c.fillRect(0,0,W,H);c.globalAlpha=1}return}
+  if(i===NS+1){ending(lt);return}
+  const k=i-1;c.fillStyle=BG;c.fillRect(0,0,W,H);
+  // カメラ：最新メッセージの下端を画面の62%に
+  const target=baseYs[k]+anchorY(k,lt)-H*.62;const prevT=k>0?baseYs[k-1]+anchorY(k-1,TL.durs[i-1])-H*.62:baseYs[0]-H*.62;
+  const tgt=Math.max(target,baseYs[0]-360);
+  if(lastT<0||t<lastT||t-lastT>.1)camY=tgt;else camY+= (tgt-camY)*(1-Math.exp(-(t-lastT)*5));
+  lastT=t;
+  // 前シーン群も残す
+  for(let j=0;j<=k;j++){const lj=j===k?lt:99;const by=baseYs[j]+240;if(by+SC[j].h-camY<0)continue;drawScene(j,lj,TL.durs[j+1],by,camY)}
+  // ヘッダ＋進捗
+  c.fillStyle=BG;c.fillRect(0,0,W,150);c.fillStyle='#fff';c.fillRect(0,150,W,2);
+  font(c,700,30);c.fillStyle=MUTED;c.textBaseline='middle';c.textAlign='left';c.fillText(TITLE,80,92);
+  const prog=(k+clamp(lt/TL.durs[i]))/NS;c.fillStyle=GRAY;c.fillRect(80,138,W-160,8);c.fillStyle=PURP;c.fillRect(80,138,(W-160)*prog,8);
+  if(lt>TL.durs[i]-.001){} }
+let camY=0,lastT=-1;window.render=render;window.ready=ready;window.setTL=setTL;
+</script>
